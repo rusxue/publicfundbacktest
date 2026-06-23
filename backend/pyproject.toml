@@ -1,0 +1,28 @@
+[project]
+name = "publicfundbacktest-backend"
+version = "0.1.0"
+description = "基金/ETF 行情可视化与量化分析系统 - 后端"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "pandas>=2.2",
+    "akshare>=1.14",
+    "loguru>=0.7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "httpx>=0.27",
+]
+
+# 非打包项目：uv 仅管理依赖，不构建自身（避免 Windows 下构建依赖安装抖动）
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
