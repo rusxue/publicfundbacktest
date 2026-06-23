@@ -1,0 +1,1 @@
+{"root":["./src/env.d.ts","./src/main.ts","./src/api/kline.ts","./src/stores/market.ts","./src/app.vue","./src/components/infocard.vue","./src/components/klinechart.vue","./src/components/sidebar.vue","./src/components/topbar.vue","./src/views/marketview.vue"],"version":"5.9.3"}
