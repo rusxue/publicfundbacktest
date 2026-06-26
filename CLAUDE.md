@@ -20,7 +20,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 前后端分离的 Monorepo:
 
 - **backend/** — Python 3.10+(uv 管理依赖),FastAPI(异步 API、自动 OpenAPI 文档)、Pydantic v2(校验)、Pandas(计算)、Loguru(日志)、akshare(数据源)。存储用 SQLite(WAL 模式)。
-- **frontend/** — Vue 3(Composition API)、Vite、TailwindCSS、Pinia、axios。图表库为 **klinecharts**(原生支持移动端触摸与 MA 叠加)。
+- **frontend/** — Vue 3(Composition API)、Vite、TailwindCSS、Pinia、axios。图表库为 **ECharts**(支持蜡烛图/折线、十字准星、缩放/平移、MA 叠加)。
 - **scripts/run_dev.py** — 一键同时拉起 uvicorn(8000)与 vite(5173),Ctrl+C 统一终止。
 - **docs/** — 文档。
 
@@ -43,9 +43,9 @@ backend/{tests/, data/ (data.db), logs/, pyproject.toml, .env(.example)}
 ### 后端数据流(关键)
 
 `api/v1/market.py:fetch_kline` → `services/kline_service.get_kline`:
-1. 按代码前缀粗判标的类型(`datasource.classify_instrument`:1/5 开头=ETF,其余=FUND)。
+1. 按前端 `type` 查询参数确定标的类型(`etf`/`fund` → `ETF`/`FUND`),不再按代码前缀猜测。
 2. 增量刷新本地库(`_refresh`)。akshare 同步阻塞,均经 `asyncio.to_thread` 包裹。
-3. ETF 拉取失败且本地无缓存时,回退尝试开放式基金(少量代码可能跨类)。
+3. 严格按指定类型路由数据源,拉取无数据即返回 `NOT_FOUND`,不在 ETF/基金两类间回退。
 4. 从库取全量日线 →(周线重采样)→ MA → 组装 `KlineResponse`。
 
 **数据源适配器** `services/datasource.py` 是 akshare 字段名的唯一隔离层——上游只接触规范化后的 DataFrame(`ETF 日线:[date,open,high,low,close,volume]`,`基金净值:[date,nav]`)。ETF 行情源由 `etf_data_source` 配置切换:`sina`(新浪,需带 sh/sz 前缀,返回全量后按区间过滤)或 `em`(东方财富,参数化起止日期,但可能被远端重置)。akshare 对无效基金代码常抛 JS 解析异常(HTML 错误页),`_is_parse_error` 将其映射为 `NotFoundError`。
@@ -60,7 +60,7 @@ backend/{tests/, data/ (data.db), logs/, pyproject.toml, .env(.example)}
 
 ### API 契约
 
-主接口:`GET /api/v1/market/kline/{code}?period=daily|weekly`
+主接口:`GET /api/v1/market/kline/{code}?type=etf|fund&period=daily|weekly`
 
 成功响应(200):
 ```json
@@ -78,7 +78,7 @@ backend/{tests/, data/ (data.db), logs/, pyproject.toml, .env(.example)}
 - 深色主题(黑色/深灰背景)。
 - 桌面端双栏:左侧边栏(搜索 + 标的列表,含代码/名称/当前价/涨跌幅,红涨绿跌),右侧主区(信息卡片 + K 线图)。移动端自动转为上下布局。
 - 搜索历史默认显示最近 5 条;可加星标移入可手动排序的星标列表。
-- 图表:OHLCV 蜡烛图 + MA5/10/20/30/60、成交量副图(绿涨红跌)、悬停十字准星、滚轮缩放、拖拽平移、点击图例隐藏/显示。
+- 图表:OHLCV 蜡烛图 + MA5/10/20/30/60、悬停十字准星、滚轮缩放、拖拽平移、点击图例隐藏/显示。基金日线绘净值折线,周线由日净值重采样为伪 K 线;无成交量副图、无 MA 副图,保持界面简洁。
 - 顶部控制栏:周期切换(1日 / 1周)、指标开关。
 
 ## 常用命令

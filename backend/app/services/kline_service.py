@@ -105,16 +105,22 @@ async def _refresh(code: str, instrument_type: str) -> str:
     local = _load_local(code)
     latest = _local_latest_date(local)
     name = local["name"].iloc[0] if (local is not None and not local.empty) else None
-    instrument_type = (
-        local["instrument_type"].iloc[0]
-        if (local is not None and not local.empty)
-        else instrument_type
-    )
+    # 标的类型始终以调用方（前端选项条）传入为准，不读本地库 instrument_type，
+    # 避免历史脏数据把类型改回去
 
     # 计算拉取区间
     if latest is None:
         start, end = _range(settings.history_years)
     else:
+        # 类型不匹配校验：本地缓存的类型与请求类型不一致时，视为该代码在请求类型下不存在。
+        # 避免本地脏数据（如历史误存的 ETF 数据）在按另一类型查询时被原样返回。
+        cached_type = str(local["instrument_type"].iloc[0])
+        if cached_type != instrument_type:
+            logger.info(
+                "类型不匹配 code={} cached={} requested={} -> NOT_FOUND",
+                code, cached_type, instrument_type,
+            )
+            raise NotFoundError()
         # 从最新日期次日开始
         start_dt = datetime.strptime(latest, "%Y-%m-%d") + timedelta(days=1)
         start = start_dt.strftime("%Y%m%d")
@@ -122,7 +128,9 @@ async def _refresh(code: str, instrument_type: str) -> str:
         if start > end:
             # 已是最新，无需拉取
             if name is None:
-                _, _, name = await asyncio.to_thread(datasource.resolve_instrument, code)
+                _, _, name = await asyncio.to_thread(
+                    datasource.resolve_instrument, code, instrument_type
+                )
             return name
 
     # 遵守请求间隔
@@ -152,7 +160,9 @@ async def _refresh(code: str, instrument_type: str) -> str:
     # 名称若未知，尝试解析
     if name is None:
         try:
-            _, _, name = await asyncio.to_thread(datasource.resolve_instrument, code)
+            _, _, name = await asyncio.to_thread(
+                datasource.resolve_instrument, code, instrument_type
+            )
         except Exception:
             name = code
 
@@ -174,35 +184,25 @@ def _range(years: int) -> tuple[str, str]:
 
 # ---------- 主入口 ----------
 
-async def get_kline(code: str, period: str) -> KlineResponse:
+async def get_kline(code: str, period: str, instrument_type: str) -> KlineResponse:
     """获取 K 线数据。
 
     :param code: 6 位标的代码
     :param period: daily / weekly
+    :param instrument_type: 标的类型 ETF / FUND（由前端选项条指定），
+        后端严格按此类型路由数据源，不再按代码前缀猜测，也不在两类间回退。
     """
     code = code.strip()
-    settings = get_settings()
     is_degraded = False
 
     # 1. 先尝试增量刷新本地库；失败则降级到本地缓存
+    # 标的类型以传入的 instrument_type 为准（本地库 instrument_type 不再驱动主流程）
     local = _load_local(code)
-    instrument_type = (
-        local["instrument_type"].iloc[0] if (local is not None and not local.empty) else None
-    )
-    if instrument_type is None:
-        # 未知类型，按代码前缀粗分（纯本地，无网络）
-        instrument_type = datasource.classify_instrument(code)
 
     try:
         await _refresh(code, instrument_type)
-    except NotFoundError:
-        # ETF 拉取无数据时，回退尝试开放式基金（少量代码可能跨类）
-        if instrument_type == "ETF" and (local is None or local.empty):
-            instrument_type = "FUND"
-            await _refresh(code, instrument_type)
-        else:
-            raise
     except DataSourceError:
+        # 严格按类型：NotFound 直接上抛，不在两类间回退；仅数据源故障时降级本地缓存
         if local is None or local.empty:
             raise
         is_degraded = True
@@ -214,7 +214,6 @@ async def get_kline(code: str, period: str) -> KlineResponse:
         raise NotFoundError()
 
     name = str(df["name"].iloc[0] or code)
-    instrument_type = str(df["instrument_type"].iloc[0])
 
     # 3. 周期处理
     if period == PERIOD_WEEKLY:
