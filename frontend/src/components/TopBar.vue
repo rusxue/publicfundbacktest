@@ -1,9 +1,10 @@
 <script setup lang="ts">
 /**
- * 顶部控制栏：周期切换、指标开关、最新价、降级提示。
+ * 顶部控制栏：周期切换、主题切换按钮、加载状态、错误提示、最新价。
  */
 import { computed } from 'vue'
 import { useMarketStore } from '@/stores/market'
+import ThemeToggle from './ThemeToggle.vue'
 
 const store = useMarketStore()
 
@@ -27,37 +28,52 @@ const changePct = computed(() => {
 </script>
 
 <template>
-  <div class="flex items-center gap-3 px-4 py-2 bg-bg-800 border-b border-bg-600 text-sm">
+  <div class="flex items-center gap-2 px-4 py-2 border-b bg-bg-surface border-border text-sm">
     <!-- 周期切换 -->
-    <div class="flex items-center bg-bg-700 rounded overflow-hidden">
+    <div class="flex items-center bg-bg-elevated rounded overflow-hidden border border-border">
       <button
-        class="px-3 py-1"
-        :class="period === 'daily' ? 'bg-accent text-white' : 'text-gray-400'"
+        class="px-3 py-1 text-xs transition-colors duration-150"
+        :class="period === 'daily'
+          ? 'bg-accent text-white'
+          : 'text-fg-muted hover:bg-bg-hover'"
         @click="store.switchPeriod('daily')"
-      >1日</button>
+      >日线</button>
       <button
-        class="px-3 py-1"
-        :class="period === 'weekly' ? 'bg-accent text-white' : 'text-gray-400'"
+        class="px-3 py-1 text-xs transition-colors duration-150"
+        :class="period === 'weekly'
+          ? 'bg-accent text-white'
+          : 'text-fg-muted hover:bg-bg-hover'"
         @click="store.switchPeriod('weekly')"
-      >1周</button>
+      >周线</button>
     </div>
 
-    <!-- 降级提示 -->
+    <!-- 主题切换 -->
+    <ThemeToggle />
+
+    <!-- 状态提示 -->
     <span
       v-if="store.isDegraded"
-      class="text-yellow-400 text-xs"
-    >⚠ 数据可能非最新</span>
+      class="flex items-center gap-1 text-xs text-yellow-500"
+    >
+      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+        <line x1="12" y1="9" x2="12" y2="13"/>
+        <line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+      数据可能非最新
+    </span>
 
-    <!-- 错误 -->
-    <span v-if="store.errorMsg" class="text-red-400 text-xs">{{ store.errorMsg }}</span>
-    <span v-if="store.loading" class="text-gray-400 text-xs">加载中…</span>
+    <span v-if="store.errorMsg" class="text-xs text-up">{{ store.errorMsg }}</span>
+    <span v-if="store.loading" class="text-xs text-fg-muted">加载中...</span>
 
     <!-- 最新价 -->
     <div class="ml-auto flex items-center gap-2">
       <template v-if="lastPrice != null">
-        <span class="text-gray-400">{{ lastPrice.toFixed(3) }}</span>
+        <span class="text-fg font-mono text-sm font-medium">{{ lastPrice.toFixed(3) }}</span>
         <span
           v-if="changePct != null"
+          class="font-mono text-xs"
           :class="changePct >= 0 ? 'text-up' : 'text-down'"
         >{{ changePct >= 0 ? '+' : '' }}{{ changePct.toFixed(2) }}%</span>
       </template>

@@ -7,7 +7,7 @@
 ```
 publicfundbacktest/
 ├── backend/    # FastAPI + Pandas + akshare + SQLite，uv 管理依赖
-├── frontend/   # Vue 3 + Vite + TailwindCSS + Pinia + klinecharts
+├── frontend/   # Vue 3 + Vite + TailwindCSS + Pinia + echarts
 ├── scripts/run_dev.py  # 一键启动前后端
 └── docs/
 ```

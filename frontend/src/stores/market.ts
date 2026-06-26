@@ -11,6 +11,8 @@ import {
   type Period,
 } from '@/api/kline'
 
+export type Theme = 'light' | 'dark'
+
 const HISTORY_KEY = 'pfb_history'
 const STARRED_KEY = 'pfb_starred'
 const MAX_HISTORY = 5
@@ -24,6 +26,26 @@ export interface ListItem {
 }
 
 export const useMarketStore = defineStore('market', () => {
+  // ===== 主题（明/暗）=====
+  const theme = ref<'light' | 'dark'>('light')
+
+  function initTheme() {
+    const saved = (localStorage.getItem('pfb_theme') ?? 'light') as 'light' | 'dark'
+    theme.value = saved
+    applyTheme(saved)
+  }
+
+  function toggleTheme() {
+    const next = theme.value === 'light' ? 'dark' : 'light'
+    theme.value = next
+    localStorage.setItem('pfb_theme', next)
+    applyTheme(next)
+  }
+
+  function applyTheme(t: 'light' | 'dark') {
+    document.documentElement.classList.toggle('dark', t === 'dark')
+  }
+
   // ===== 当前展示 =====
   const current = ref<KlineResponse | null>(null)
   const period = ref<Period>('daily')
@@ -51,13 +73,13 @@ export const useMarketStore = defineStore('market', () => {
   }
 
   /** 查询行情并刷新当前展示 */
-  async function query(code: string, type?: 'ETF' | 'FUND') {
+  async function query(code: string, type: 'ETF' | 'FUND') {
     const c = code.trim()
     if (!c) return
     loading.value = true
     errorMsg.value = ''
     try {
-      const resp = await fetchKline(c, period.value)
+      const resp = await fetchKline(c, period.value, type)
       current.value = resp
       const item = toListItem(resp)
       pushHistory(item)
@@ -134,8 +156,8 @@ export const useMarketStore = defineStore('market', () => {
   function switchPeriod(p: Period) {
     period.value = p
     if (current.value) {
-      // 重新拉取以切换周期
-      query(current.value.instrument.code)
+      // 重新拉取以切换周期（沿用当前标的类型，类型不随周期切换而变）
+      query(current.value.instrument.code, current.value.instrument.type)
     }
   }
 
@@ -154,5 +176,9 @@ export const useMarketStore = defineStore('market', () => {
     toggleStar,
     moveStarred,
     switchPeriod,
+    // 主题
+    theme,
+    initTheme,
+    toggleTheme,
   }
 })

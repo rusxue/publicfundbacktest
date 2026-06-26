@@ -11,23 +11,23 @@ const periodText = computed(() => (store.period === 'daily' ? '日线' : '周线
 </script>
 
 <template>
-  <div class="px-4 py-3 bg-bg-800 border-b border-bg-600">
+  <div class="px-4 py-2.5 border-b bg-bg-surface border-border">
     <template v-if="inst">
-      <div class="flex items-baseline gap-2">
-        <span class="text-lg font-semibold text-white">{{ inst.name }}</span>
-        <span class="text-sm text-gray-400">{{ inst.code }}</span>
-        <span
-          class="text-xs px-1.5 py-0.5 rounded bg-bg-600 text-gray-300"
-        >{{ inst.type }}</span>
-        <span class="text-xs text-gray-500">{{ periodText }}</span>
+      <div class="flex items-baseline gap-2 flex-wrap">
+        <span class="text-base font-semibold text-fg">{{ inst.name }}</span>
+        <span class="text-xs text-fg-muted font-mono">{{ inst.code }}</span>
+        <span class="text-xs px-1.5 py-0.5 rounded bg-bg-elevated text-fg-muted border border-border">
+          {{ inst.type }}
+        </span>
+        <span class="text-xs text-fg-faint">{{ periodText }}</span>
         <span
           v-if="store.isDegraded"
-          class="text-xs text-yellow-400"
+          class="text-xs text-yellow-500"
         >数据可能非最新</span>
       </div>
     </template>
     <template v-else>
-      <div class="text-gray-500 text-sm">
+      <div class="text-fg-muted text-sm">
         在左侧输入代码查询行情，示例：159915（创业板ETF）、510300（沪深300ETF）
       </div>
     </template>

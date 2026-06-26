@@ -37,10 +37,13 @@ def _date_range(years: int) -> tuple[str, str]:
 
 
 def classify_instrument(code: str) -> InstrumentType:
-    """按代码前缀粗分类型。
+    """按代码前缀粗分类型（仅作前缀约定参考，非主流程依据）。
 
     约定：场内 ETF/股票代码以 1 或 5 开头（如 159915、510300）；
-    开放式基金以 0 开头（如 000001）。这是粗判，若拉取失败可在上层回退。
+    开放式基金以 0 开头（如 000001）。
+
+    主流程的标的类型由前端选项条的 ``type`` 参数指定，后端不再据此猜测；
+    本函数仅保留供名称查询的先验推断等辅助场景使用。
     """
     code = code.strip()
     if code and code[0] in ("1", "5"):
@@ -48,10 +51,11 @@ def classify_instrument(code: str) -> InstrumentType:
     return "FUND"
 
 
-def resolve_instrument(code: str) -> tuple[str, InstrumentType, str]:
-    """判断标的类型并尝试取名称。
+def resolve_instrument(code: str, instrument_type: InstrumentType) -> tuple[str, InstrumentType, str]:
+    """按指定类型尝试取名称。
 
-    类型按前缀粗分；名称为尽力获取，取不到回退为代码本身。
+    :param instrument_type: 标的类型（由前端选项条指定），名称查询先查对应类型表，
+        失败再跨表兜底；返回的 type 直接沿用传入值。
     代码格式不合法抛 NotFoundError。
 
     返回 (code, type, name)。
@@ -60,16 +64,18 @@ def resolve_instrument(code: str) -> tuple[str, InstrumentType, str]:
     if not code or not code.isdigit() or len(code) != 6:
         raise NotFoundError("代码格式不正确，需为 6 位数字")
 
-    instrument_type = classify_instrument(code)
+    primary_name = _etf_name if instrument_type == "ETF" else _fund_name
+    fallback_name = _fund_name if instrument_type == "ETF" else _etf_name
+
     name = code
     try:
-        name = _etf_name(code) if instrument_type == "ETF" else _fund_name(code)
+        name = primary_name(code)
     except Exception as exc:
         logger.debug("名称查询失败 code={}: {}", code, exc)
     if not name:
-        # 跨表兜底：ETF 名称查不到时试基金表，反之亦然
+        # 跨表兜底：主表查不到时试另一张表
         try:
-            name = _fund_name(code) if instrument_type == "ETF" else _etf_name(code)
+            name = fallback_name(code)
         except Exception:
             pass
     return code, instrument_type, name or code
