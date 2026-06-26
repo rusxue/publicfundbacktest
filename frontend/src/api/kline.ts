@@ -50,10 +50,11 @@ export async function fetchKline(
   code: string,
   period: Period,
   type: 'ETF' | 'FUND',
+  signal?: AbortSignal,
 ): Promise<KlineResponse> {
   const { data } = await http.get<KlineResponse>(
     `/market/kline/${code}`,
-    { params: { period, type: type.toLowerCase() } },
+    { params: { period, type: type.toLowerCase() }, signal },
   )
   return data
 }

@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     # ETF 行情源：sina（新浪，当前环境可用）/ em（东方财富，可能被重置）
     etf_data_source: str = "sina"
 
+    # 交易日历
+    trade_calendar_ttl_days: int = 7   # 交易日表新鲜度阈值，超过则重新拉取
+    trade_close_time: str = "15:00"    # A 股收盘时间，收盘后 target 含今天
+
     # 计算参数
     ma_periods: str = "5,10,20,30,60"
 

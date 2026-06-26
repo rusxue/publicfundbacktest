@@ -19,9 +19,10 @@ from app.config import get_settings
 from app.core.db import get_conn
 from app.core.errors import DataSourceError, NotFoundError
 from app.schemas.kline import Instrument, KlineItem, KlineResponse
-from app.services import datasource
+from app.services import calendar_service, datasource
 from app.services.ma import compute_ma
 from app.services.resample import resample_weekly
+from app.services.throttle import throttle_remote
 
 
 PERIOD_DAILY = "daily"
@@ -95,18 +96,37 @@ def _float_or_none(v):
 
 # ---------- 增量拉取 ----------
 
-async def _refresh(code: str, instrument_type: str) -> str:
+async def _refresh(code: str, instrument_type: str, local: pd.DataFrame | None) -> str:
     """按增量策略拉取并入库，返回标的名称。
 
+    :param local: 调用方已读取的本地全量日线（避免重复读库），可为 None。
     :raises NotFoundError: 代码不存在
     :raises DataSourceError: 数据源故障且本地无缓存
     """
     settings = get_settings()
-    local = _load_local(code)
     latest = _local_latest_date(local)
     name = local["name"].iloc[0] if (local is not None and not local.empty) else None
     # 标的类型始终以调用方（前端选项条）传入为准，不读本地库 instrument_type，
     # 避免历史脏数据把类型改回去
+
+    # ---------- 新鲜度判断：本地已更新到目标交易日则跳过远端拉取 ----------
+    # 目标交易日 = 交易日收盘后含今天，否则上一交易日。命中即不 sleep、不请求
+    # akshare，把切换响应从 ~2s 降到 ~86ms。交易日历未就绪时 target 为 None，
+    # 走下方原有增量逻辑兜底。
+    await calendar_service.ensure_trade_calendar()
+    target = calendar_service.target_trade_date(datetime.now())
+    if (
+        local is not None
+        and not local.empty
+        and target is not None
+        and latest is not None
+        and latest >= target
+    ):
+        logger.info(
+            "本地已是最新，跳过刷新 code={} type={} latest={} target={}",
+            code, instrument_type, latest, target,
+        )
+        return name or code
 
     # 计算拉取区间
     if latest is None:
@@ -128,13 +148,14 @@ async def _refresh(code: str, instrument_type: str) -> str:
         if start > end:
             # 已是最新，无需拉取
             if name is None:
+                await throttle_remote()
                 _, _, name = await asyncio.to_thread(
                     datasource.resolve_instrument, code, instrument_type
                 )
             return name
 
-    # 遵守请求间隔
-    await asyncio.sleep(settings.data_source_interval)
+    # 遵守请求间隔（条件化：距上次远端请求不足间隔才 sleep）
+    await throttle_remote()
 
     try:
         if instrument_type == "ETF":
@@ -200,7 +221,7 @@ async def get_kline(code: str, period: str, instrument_type: str) -> KlineRespon
     local = _load_local(code)
 
     try:
-        await _refresh(code, instrument_type)
+        await _refresh(code, instrument_type, local)
     except DataSourceError:
         # 严格按类型：NotFound 直接上抛，不在两类间回退；仅数据源故障时降级本地缓存
         if local is None or local.empty:

@@ -264,3 +264,33 @@ def _fund_name(code: str) -> Optional[str]:
     if not row.empty:
         return str(row.iloc[0][name_col])
     return None
+
+
+def fetch_trade_calendar() -> pd.DataFrame:
+    """拉取 A 股交易日历。
+
+    调用 ``ak.tool_trade_date_hist_sina()``，返回全量交易日（历史 + 未来若干年）。
+    akshare 仅返回交易日，故规范化后 ``is_trade_day`` 恒为 1。
+
+    :return: DataFrame[calendar_date, is_trade_day]，calendar_date 为 YYYY-MM-DD
+    :raises DataSourceError: 数据源异常
+    """
+    try:
+        raw = ak.tool_trade_date_hist_sina()
+    except Exception as exc:
+        logger.warning("交易日历拉取失败: {}", exc)
+        raise DataSourceError("数据源请求失败") from exc
+
+    if raw is None or raw.empty:
+        raise DataSourceError("交易日历为空")
+
+    # akshare 返回列名为 trade_date，类型为 datetime
+    date_col = "trade_date" if "trade_date" in raw.columns else raw.columns[0]
+    df = pd.DataFrame({
+        "calendar_date": pd.to_datetime(raw[date_col]).dt.strftime("%Y-%m-%d"),
+        "is_trade_day": 1,
+    })
+    df = df.dropna(subset=["calendar_date"]).drop_duplicates(
+        subset=["calendar_date"]
+    ).sort_values("calendar_date").reset_index(drop=True)
+    return df

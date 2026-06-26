@@ -7,7 +7,7 @@
  * - 基金日线:净值 area 折线
  * - MA 由后端预计算(ma5/10/20/30/60),前端零计算压力,遇 null 断线
  */
-import { onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import * as echarts from 'echarts/core'
 import { CandlestickChart, LineChart } from 'echarts/charts'
 import {
@@ -79,6 +79,21 @@ const MA_FIELDS: Record<string, keyof KlineItem> = {
   MA30: 'ma30',
   MA60: 'ma60',
 }
+
+/** 现值相对各 MA 的偏离率(%)。现值取末根 close??nav;MA 为 null 时偏离率为 null */
+const maDeviations = computed(() => {
+  const ks = store.current?.klines ?? []
+  const last = ks[ks.length - 1]
+  const price = last?.close ?? last?.nav ?? null
+  return MA_LABELS.map((label) => {
+    const ma = last ? (last[MA_FIELDS[`MA${label}`]] as number | null) : null
+    let dev: number | null = null
+    if (price != null && ma != null && ma !== 0) {
+      dev = ((price - ma) / ma) * 100
+    }
+    return { label, dev }
+  })
+})
 
 /** 基金日线 → 净值折线模式 */
 function isLineMode(): boolean {
@@ -290,6 +305,17 @@ watch(
         :style="maToggles['MA' + label] ? { backgroundColor: MA_COLORS['MA' + label] } : {}"
         @click="maToggles['MA' + label] = !maToggles['MA' + label]"
       >MA{{ label }}</button>
+    </div>
+    <!-- 现值相对各 MA 的偏离率(按均线颜色) -->
+    <div
+      v-if="maDeviations.length"
+      class="flex flex-wrap items-center gap-x-3 gap-y-0.5 px-3 py-1 text-xs bg-bg-surface border-b border-border font-mono"
+    >
+      <span
+        v-for="d in maDeviations"
+        :key="d.label"
+        :style="{ color: MA_COLORS['MA' + d.label] }"
+      >MA{{ d.label }} {{ d.dev == null ? '—' : (d.dev >= 0 ? '+' : '') + d.dev.toFixed(2) + '%' }}</span>
     </div>
     <!-- 图表容器 -->
     <div ref="chartRef" class="flex-1 min-h-0"></div>
