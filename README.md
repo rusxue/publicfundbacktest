@@ -52,4 +52,9 @@ cd backend && uv run uvicorn app.main:app --port 8000
 - 返回 MA5/10/20/30/60（前 N-1 期为 null，图表断线）。
 - 数据源不可用时返回本地缓存并置 `is_degraded: true`；无缓存返回 503。
 
-详见 [PRD.md](PRD.md)。
+`POST /api/v1/backtest/run` — MA 均线策略量化回测（后端待开发，接口规范见 [docs/backtest.md](docs/backtest.md)）。
+
+- 前端已落地量化配置页 + 回测结果页（净值/回撤曲线切换、指标面板、交易明细导出）。
+- 策略规则与界面配置见 [docs/MA均线策略量化回测界面配置.md](docs/MA均线策略量化回测界面配置.md)。
+
+详见 [PRD.md](PRD.md) 与 [docs/](docs/)。

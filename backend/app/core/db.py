@@ -32,6 +32,20 @@ _CREATE_INDEX = """
 CREATE INDEX IF NOT EXISTS idx_klines_code_date ON klines (code, date);
 """
 
+_CREATE_TRADE_CALENDAR = """
+CREATE TABLE IF NOT EXISTS trade_calendar (
+    calendar_date TEXT    NOT NULL PRIMARY KEY,  -- 自然日 YYYY-MM-DD
+    is_trade_day  INTEGER NOT NULL               -- 0/1（akshare 仅返回交易日，入库恒为 1）
+);
+"""
+
+_CREATE_META = """
+CREATE TABLE IF NOT EXISTS meta (
+    key   TEXT NOT NULL PRIMARY KEY,
+    value TEXT NOT NULL
+);
+"""
+
 
 def _connect() -> sqlite3.Connection:
     """建立连接并设置 WAL 模式。"""
@@ -54,6 +68,8 @@ def init_db() -> None:
     with _connect() as conn:
         conn.execute(_CREATE_KLINES)
         conn.execute(_CREATE_INDEX)
+        conn.execute(_CREATE_TRADE_CALENDAR)
+        conn.execute(_CREATE_META)
 
 
 @contextmanager

@@ -18,6 +18,7 @@ from app.config import get_settings
 from app.core.db import init_db
 from app.core.errors import register_error_handlers
 from app.core.logger import get_logger, setup_logging
+from app.services import calendar_service
 
 
 @asynccontextmanager
@@ -26,6 +27,11 @@ async def lifespan(app: FastAPI):
     setup_logging()
     log = get_logger()
     init_db()
+    # 预热交易日历：避免首个行情请求阻塞在交易日表拉取上；失败仅告警不阻断
+    try:
+        await calendar_service.ensure_trade_calendar()
+    except Exception as exc:
+        log.warning("启动时交易日历预热失败: {}", exc)
     log.info("应用启动完成：数据库已初始化")
     yield
     log.info("应用关闭")

@@ -5,22 +5,46 @@
  */
 import { ref } from 'vue'
 import { useMarketStore, type ListItem } from '@/stores/market'
+import { useRouter, useRoute } from 'vue-router'
 
 const store = useMarketStore()
+const router = useRouter()
+const route = useRoute()
 
 const code = ref('')
 const searchType = ref<'ETF' | 'FUND'>('ETF')
 
+function goMarket(code: string, type: 'ETF' | 'FUND') {
+  // 跳行情页并带 query；MarketView 监听 query 后自动查询。
+  router.push({
+    path: '/market',
+    query: { code, type },
+  })
+}
+
+/** 在当前视图上下文中应用标的选择 */
+function applySelection(code: string, type: 'ETF' | 'FUND') {
+  store.query(code, type)
+  if (route.name === 'market') return // 行情页：MarketView 监听 query 即刷新
+  if (route.name === 'config' || route.name === 'result') {
+    // 量化页：仅切换标的，留在配置页；不进行情页
+    router.push('/backtest')
+    return
+  }
+  goMarket(code, type)
+}
+
 function onSearch() {
   if (!code.value.trim()) return
-  store.query(code.value, searchType.value)
+  const c = code.value.trim()
+  applySelection(c, searchType.value)
   code.value = ''
 }
 
 function onItemClick(item: ListItem) {
   code.value = item.code
   searchType.value = item.type
-  store.query(item.code, item.type)
+  applySelection(item.code, item.type)
 }
 
 function fmtPrice(p: number | null) {

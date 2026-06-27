@@ -4,6 +4,7 @@
  */
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { isCancel } from 'axios'
 import {
   fetchKline,
   extractError,
@@ -73,23 +74,61 @@ export const useMarketStore = defineStore('market', () => {
   }
 
   /** 查询行情并刷新当前展示 */
+  // 请求竞态控制：切标的/切周期时取消上一个在飞请求；相同请求在飞时去重复用，
+  // 避免快速连点叠发；被取消的请求静默处理，不写错误、不清空展示。
+  const inflight = new Map<string, Promise<KlineResponse>>()
+  let currentController: AbortController | null = null
+
+  function applyResult(resp: KlineResponse) {
+    current.value = resp
+    const item = toListItem(resp)
+    pushHistory(item)
+    // 若已在星标列表，同步其名称/价格
+    syncStarred(item)
+  }
+
   async function query(code: string, type: 'ETF' | 'FUND') {
     const c = code.trim()
     if (!c) return
+    const key = `${c}|${type}|${period.value}`
+
+    // 去重：相同请求在飞则复用，避免叠发
+    const existing = inflight.get(key)
+    if (existing) {
+      loading.value = true
+      try {
+        applyResult(await existing)
+      } catch (err) {
+        if (!isCancel(err)) {
+          errorMsg.value = extractError(err)
+          current.value = null
+        }
+      } finally {
+        loading.value = inflight.size > 0
+      }
+      return
+    }
+
+    // 取消上一个在飞请求（切标的/切周期时旧请求不再需要）
+    currentController?.abort()
+    const controller = new AbortController()
+    currentController = controller
+
     loading.value = true
     errorMsg.value = ''
+    const p = fetchKline(c, period.value, type, controller.signal)
+    inflight.set(key, p)
     try {
-      const resp = await fetchKline(c, period.value, type)
-      current.value = resp
-      const item = toListItem(resp)
-      pushHistory(item)
-      // 若已在星标列表，同步其名称/价格
-      syncStarred(item)
+      applyResult(await p)
     } catch (err) {
+      // 被新请求取消：静默，不报错、不清空
+      if (isCancel(err)) return
       errorMsg.value = extractError(err)
       current.value = null
     } finally {
-      loading.value = false
+      inflight.delete(key)
+      if (currentController === controller) currentController = null
+      loading.value = inflight.size > 0
     }
   }
 
